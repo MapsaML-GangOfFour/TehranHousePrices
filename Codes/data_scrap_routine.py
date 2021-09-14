@@ -8,13 +8,16 @@ from time import sleep
 WAIT_SECS = 0.5
 
 
-def pages_getter(total_page: typing.Optional[int] = None):
-    for i in count(1):
-        print(f'بررسی صفحه شماره {i}')
-        link = f'https://api.divar.ir/v8/web-search/tehran/buy-apartment?price=2000000-&page={i}'
-        requests_error_handler(link, search_page_post_getter)
-        if i == total_page:
-            break
+def pages_getter(total_page: typing.Optional[int] = None, districts: typing.Optional[typing.List[str]] = None):
+    if districts is None:
+        districts = ['']
+    for district in districts:
+        for i in count(1):
+            print(f'بررسی صفحه شماره {i} در {district}')
+            link = f'https://api.divar.ir/v8/web-search/tehran/buy-apartment?q={district}&price=2000000-&page={i}'
+            requests_error_handler(link, search_page_post_getter)
+            if i == total_page:
+                break
 
 
 def requests_error_handler(link: str, func: typing.Callable) -> typing.Any:
@@ -30,7 +33,8 @@ def requests_error_handler(link: str, func: typing.Callable) -> typing.Any:
             print(err)
             print('برای تکرار enter کنید و یا برای بستن برنامه break را تایپ کنید.')
             if input('>') == 'break':
-                break
+                database_file.close()
+                exit()
 
 
 def search_page_post_getter(data: typing.Dict):
@@ -100,7 +104,8 @@ def json_writer():
 
 
 if __name__ == '__main__':
+    Tehran_districts = [line.strip() for line in open('./district.csv', encoding='utf-8')]
     database_file = json_writer()
     database_file.send(None)
-    pages_getter(total_page=None)  # برای استخراج بی نهایت مقدار ندهید
+    pages_getter(total_page=1, districts=Tehran_districts)  # برای استخراج بی نهایت مقدار ندهید
     database_file.close()
