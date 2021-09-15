@@ -8,16 +8,21 @@ from time import sleep
 WAIT_SECS = 0.5
 
 
-def pages_getter(total_page: typing.Optional[int] = None, districts: typing.Optional[typing.List[str]] = None):
-    if districts is None:
-        districts = ['']
-    for district in districts:
-        for i in count(1):
-            print(f'بررسی صفحه شماره {i} در {district}')
-            link = f'https://api.divar.ir/v8/web-search/tehran/buy-apartment?q={district}&price=2000000-&page={i}'
-            requests_error_handler(link, search_page_post_getter)
-            if i == total_page:
-                break
+class ItemsFinished(Exception):
+    pass
+
+
+def pages_getter(total_page: typing.Optional[int] = None, min_price=1, max_price=1000):
+    for j in range(min_price, max_price + 1):
+        try:
+            for i in count(1):
+                print(f'بررسی صفحه شماره {i} در رده ی قیمت {j}10,000,000-{j + 1}00,000,000 ')
+                link = f'https://api.divar.ir/v8/web-search/tehran/buy-apartment?price={j}10000000-{j + 1}00000000&page={i}'
+                requests_error_handler(link, search_page_post_getter)
+                if i == total_page:
+                    break
+        except ItemsFinished:
+            pass
 
 
 def requests_error_handler(link: str, func: typing.Callable) -> typing.Any:
@@ -38,6 +43,8 @@ def requests_error_handler(link: str, func: typing.Callable) -> typing.Any:
 
 
 def search_page_post_getter(data: typing.Dict):
+    if data['first_post_date'] == -1:
+        raise ItemsFinished
     print(f'\tتعداد {len(data)} مورد در این صفحه یافت شد.')
     for post in data['web_widgets']['post_list']:
         link = f"https://api.divar.ir/v5/posts/{post['data']['token']}"
@@ -79,33 +86,43 @@ def json_scraper(data: typing.Dict):
     detail_page = data['widgets']['list_data'][-1]
     extracted = {'ناحیه'      : data['data']['district'],
                  'نوع ساختمان': data['data']['category']['title'],
-                 'متن توضیحات': data['data']['description']
+                 'متن توضیحات': data['data']['description'],
+                 'token'      : data['data']['webengage']['token']
                  }
     extractor_fun(list_data, extracted)
     detail_extractor_fun(detail_page, extracted)
     database_file.send(extracted)
 
 
-def json_writer():
+def json_writer(filename=''):
     item = yield
-    with open('database.json', 'w') as file:
+    full_name = f'database-{filename}.json'
+    with open(full_name, 'w') as file:
         file.write('[')
         json.dump(item, file)
+    record = 1
     while True:
         try:
             item = yield
-            with open('database.json', 'a+') as file:
+            with open(full_name, 'a+') as file:
                 file.write(',')
                 file.write(json.dumps(item, separators=(',', ':')))
+            record += 1
+            print(f'رکورد {record} ذخیره شده ')
+        except OSError as err:
+            print(err)
+            if input('برای اتمام برنامه break را تایپ کنید و برای تکرار دوباره اینتر کنید \n>') == 'break':
+                raise GeneratorExit
+            else:
+                pass
         except GeneratorExit:
-            with open('database.json', 'a+') as file:
+            with open(full_name, 'a+') as file:
                 file.write(']')
-            break
+                break
 
 
 if __name__ == '__main__':
-    Tehran_districts = [line.strip() for line in open('./district.csv', encoding='utf-8')]
-    database_file = json_writer()
+    database_file = json_writer('bil1-999')
     database_file.send(None)
-    pages_getter(total_page=1, districts=Tehran_districts)  # برای استخراج بی نهایت مقدار ندهید
+    pages_getter(total_page=None, min_price=1, max_price=999)  # تا آخرین صفحه ی دارای اطلاعات پیش می رود
     database_file.close()
